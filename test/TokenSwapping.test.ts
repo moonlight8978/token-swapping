@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { Signer } from "ethers";
+import { BigNumberish, ContractFactory, Contract } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 import {
@@ -10,43 +10,74 @@ import {
   USDT__factory,
   PKF,
   PKF__factory,
+  IERC20,
 } from "../typechain";
+
+const deployContract = async <T extends Contract>(
+  name: string,
+  contractOwner: SignerWithAddress,
+  ...args: any[]
+) => {
+  const contractFactory = await ethers.getContractFactory(name, contractOwner);
+  return contractFactory.deploy(...args) as Promise<T>;
+};
+
+const deployToken = async <T extends Contract>(
+  name: string,
+  contractOwner: SignerWithAddress
+) => {
+  return deployContract<T>(name, contractOwner, 1000000);
+};
+
+const seed = async <T extends IERC20>(
+  contract: T,
+  owner: SignerWithAddress,
+  recipients: any[],
+  amount: BigNumberish
+) => {
+  for (const recipient of recipients) {
+    await contract.approve(owner.address, amount);
+    await contract.transferFrom(owner.address, recipient.address, amount);
+  }
+};
 
 describe("TokenSwapping contract", function () {
   let contract: TokenSwapping;
+  let admin: SignerWithAddress;
+
   let usdtContract: USDT;
-  let pkfContract: PKF;
-  let owner: SignerWithAddress;
-  let user: SignerWithAddress;
   let usdtOwner: SignerWithAddress;
+
+  let pkfContract: PKF;
   let pkfOwner: SignerWithAddress;
 
+  let user: SignerWithAddress;
+
   beforeEach(async function () {
-    [owner, user, usdtOwner, pkfOwner] = await ethers.getSigners();
+    [admin, user, usdtOwner, pkfOwner] = await ethers.getSigners();
 
-    const usdtFactory = (await ethers.getContractFactory(
-      "USDT",
-      owner
-    )) as USDT__factory;
-    usdtContract = await usdtFactory.deploy(10000000000);
+    contract = await deployContract<TokenSwapping>("TokenSwapping", admin);
 
-    const pdkFactory = (await ethers.getContractFactory(
-      "PKF",
-      owner
-    )) as PKF__factory;
-    pkfContract = await pdkFactory.deploy(10000000000);
+    usdtContract = await deployToken<USDT>("USDT", usdtOwner);
+    pkfContract = await deployToken<PKF>("PKF", pkfOwner);
 
-    const contractFactory = (await ethers.getContractFactory(
-      "TokenSwapping",
-      owner
-    )) as TokenSwapping__factory;
-    contract = await contractFactory.deploy();
+    await seed(usdtContract, usdtOwner, [user, contract], 100);
+    await seed(pkfContract, pkfOwner, [user, contract], 100);
   });
 
-  describe("Deployment", function () {
-    it("Should set the right owner", async function () {
-      expect(await contract.owner()).to.equal(owner.address);
+  it("init correctly", async () => {
+    expect(await usdtContract.balanceOf(user.address)).to.equal(100);
+    expect(await usdtContract.balanceOf(user.address)).to.equal(100);
+  });
+
+  describe("deployment", () => {
+    it("set the right owner", async function () {
+      expect(await contract.owner()).to.equal(admin.address);
     });
+  });
+
+  describe("set token pair", () => {
+    context("when token pair exist", () => {});
   });
 
   // describe("Transactions", function () {
