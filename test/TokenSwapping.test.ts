@@ -101,6 +101,15 @@ describe("TokenSwapping contract", function () {
       rate = await contract.getRate(usdtContract.address, pkfContract.address);
       expect(rate.map((e) => e.toString())).to.deep.equal(["1", "4"]);
     });
+
+    it("does not allow non-owner to modify", async () => {
+      const modify = contract
+        .connect(user)
+        .modifyRate(usdtContract.address, pkfContract.address, 1, 3);
+      await expect(modify).to.be.revertedWith(
+        "Ownable: caller is not the owner"
+      );
+    });
   });
 
   describe("Swapping", () => {
