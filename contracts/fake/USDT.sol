@@ -7,4 +7,8 @@ contract USDT is ERC20 {
     constructor(uint256 initialBalance) ERC20("Tether USD", "USDT") {
         _mint(msg.sender, initialBalance);
     }
+
+    function decimals() public view virtual override returns (uint8) {
+        return 0;
+    }
 }

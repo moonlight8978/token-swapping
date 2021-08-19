@@ -1,17 +1,9 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { BigNumberish, ContractFactory, Contract } from "ethers";
+import { BigNumberish, Contract } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
-import {
-  TokenSwapping__factory,
-  TokenSwapping,
-  USDT,
-  USDT__factory,
-  PKF,
-  PKF__factory,
-  IERC20,
-} from "../typechain";
+import { TokenSwapping, USDT, PKF, IERC20 } from "../typechain";
 
 const deployContract = async <T extends Contract>(
   name: string,
@@ -41,6 +33,8 @@ const seed = async <T extends IERC20>(
   }
 };
 
+const INITIAL_TOKEN_AMOUNT = 100;
+
 describe("TokenSwapping contract", function () {
   let contract: TokenSwapping;
   let admin: SignerWithAddress;
@@ -60,14 +54,6 @@ describe("TokenSwapping contract", function () {
 
     usdtContract = await deployToken<USDT>("USDT", usdtOwner);
     pkfContract = await deployToken<PKF>("PKF", pkfOwner);
-
-    await seed(usdtContract, usdtOwner, [user, contract], 100);
-    await seed(pkfContract, pkfOwner, [user, contract], 100);
-  });
-
-  it("init correctly", async () => {
-    expect(await usdtContract.balanceOf(user.address)).to.equal(100);
-    expect(await usdtContract.balanceOf(user.address)).to.equal(100);
   });
 
   describe("deployment", () => {
@@ -77,57 +63,139 @@ describe("TokenSwapping contract", function () {
   });
 
   describe("set token pair", () => {
-    context("when token pair exist", () => {});
+    it("creates new pair", async () => {
+      await contract.modifyRate(
+        usdtContract.address,
+        pkfContract.address,
+        1,
+        2
+      );
+
+      expect(
+        await contract.rates(usdtContract.address, pkfContract.address, 0)
+      ).to.equal(1);
+      expect(
+        await contract.rates(usdtContract.address, pkfContract.address, 1)
+      ).to.equal(2);
+    });
+
+    it("updates exist pair", async () => {
+      await contract.modifyRate(
+        usdtContract.address,
+        pkfContract.address,
+        1,
+        3
+      );
+      expect(
+        await contract.rates(usdtContract.address, pkfContract.address, 1)
+      ).to.equal(3);
+
+      await contract.modifyRate(
+        usdtContract.address,
+        pkfContract.address,
+        1,
+        4
+      );
+      expect(
+        await contract.rates(usdtContract.address, pkfContract.address, 1)
+      ).to.equal(4);
+    });
   });
 
-  // describe("Transactions", function () {
-  //   it("Should transfer tokens between accounts", async function () {
-  //     // Transfer 50 tokens from owner to addr1
-  //     await hardhatToken.transfer(addr1.address, 50);
-  //     const addr1Balance = await hardhatToken.balanceOf(addr1.address);
-  //     expect(addr1Balance).to.equal(50);
+  describe("Swapping", () => {
+    beforeEach(async () => {
+      await contract.modifyRate(
+        pkfContract.address,
+        usdtContract.address,
+        3,
+        1
+      );
+    });
 
-  //     // Transfer 50 tokens from addr1 to addr2
-  //     // We use .connect(signer) to send a transaction from another account
-  //     await hardhatToken.connect(addr1).transfer(addr2.address, 50);
-  //     const addr2Balance = await hardhatToken.balanceOf(addr2.address);
-  //     expect(addr2Balance).to.equal(50);
-  //   });
+    it("trade successfully between user and contract", async () => {
+      await seed(
+        usdtContract,
+        usdtOwner,
+        [user, contract],
+        INITIAL_TOKEN_AMOUNT
+      );
+      await seed(pkfContract, pkfOwner, [user, contract], INITIAL_TOKEN_AMOUNT);
+      await pkfContract.connect(user).approve(contract.address, 30);
 
-  //   it("Should fail if sender doesn’t have enough tokens", async function () {
-  //     const initialOwnerBalance = await hardhatToken.balanceOf(owner.address);
+      await contract
+        .connect(user)
+        .swap(pkfContract.address, usdtContract.address, 30);
 
-  //     // Try to send 1 token from addr1 (0 tokens) to owner (1000000 tokens).
-  //     // `require` will evaluate false and revert the transaction.
-  //     await expect(
-  //       hardhatToken.connect(addr1).transfer(owner.address, 1)
-  //     ).to.be.revertedWith("Not enough tokens");
+      expect(await pkfContract.balanceOf(user.address)).to.equal(
+        INITIAL_TOKEN_AMOUNT - 30
+      );
+      expect(await usdtContract.balanceOf(user.address)).to.equal(
+        INITIAL_TOKEN_AMOUNT + 10
+      );
 
-  //     // Owner balance shouldn't have changed.
-  //     expect(await hardhatToken.balanceOf(owner.address)).to.equal(
-  //       initialOwnerBalance
-  //     );
-  //   });
+      expect(await pkfContract.balanceOf(contract.address)).to.equal(
+        INITIAL_TOKEN_AMOUNT + 30
+      );
+      expect(await usdtContract.balanceOf(contract.address)).to.equal(
+        INITIAL_TOKEN_AMOUNT - 10
+      );
+    });
 
-  //   it("Should update balances after transfers", async function () {
-  //     const initialOwnerBalance = await hardhatToken.balanceOf(owner.address);
+    it("does not allow trading with non-exist token pair", async () => {
+      const swap = contract
+        .connect(user)
+        .swap(user.address, usdtContract.address, 30);
 
-  //     // Transfer 100 tokens from owner to addr1.
-  //     await hardhatToken.transfer(addr1.address, 100);
+      await expect(swap).to.be.revertedWith("Token cannot be exchanged");
+    });
 
-  //     // Transfer another 50 tokens from owner to addr2.
-  //     await hardhatToken.transfer(addr2.address, 50);
+    it("does not allow trading with non-exist token pair", async () => {
+      const swap = contract
+        .connect(user)
+        .swap(user.address, usdtContract.address, 30);
 
-  //     // Check balances.
-  //     const finalOwnerBalance = await hardhatToken.balanceOf(owner.address);
-  //     // @ts-expect-error
-  //     expect(finalOwnerBalance).to.equal(initialOwnerBalance - 150);
+      await expect(swap).to.be.revertedWith("Token cannot be exchanged");
+    });
 
-  //     const addr1Balance = await hardhatToken.balanceOf(addr1.address);
-  //     expect(addr1Balance).to.equal(100);
+    it("does not allow trading with invalid amount", async () => {
+      const swap = contract
+        .connect(user)
+        .swap(pkfContract.address, usdtContract.address, 31);
 
-  //     const addr2Balance = await hardhatToken.balanceOf(addr2.address);
-  //     expect(addr2Balance).to.equal(50);
-  //   });
-  // });
+      await expect(swap).to.be.revertedWith("Invalid amount to swap");
+    });
+
+    it("revert if user does not have enough tokens", async () => {
+      const swap = contract
+        .connect(user)
+        .swap(pkfContract.address, usdtContract.address, 30);
+
+      await expect(swap).to.be.revertedWith("You do not have enough tokens");
+    });
+
+    it("revert if contract does not have enought token", async () => {
+      await seed(pkfContract, pkfOwner, [user], INITIAL_TOKEN_AMOUNT);
+
+      const swap = contract
+        .connect(user)
+        .swap(pkfContract.address, usdtContract.address, 30);
+
+      await expect(swap).to.be.revertedWith(
+        "We do not have enough tokens. Please try again"
+      );
+    });
+
+    it("revert if user has not approve the contract", async () => {
+      await seed(pkfContract, pkfOwner, [user], INITIAL_TOKEN_AMOUNT);
+      await seed(usdtContract, usdtOwner, [contract], INITIAL_TOKEN_AMOUNT);
+
+      const swap = contract
+        .connect(user)
+        .swap(pkfContract.address, usdtContract.address, 30);
+
+      await expect(swap).to.be.revertedWith(
+        "ERC20: transfer amount exceeds allowance"
+      );
+    });
+  });
 });
