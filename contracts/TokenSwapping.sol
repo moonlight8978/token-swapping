@@ -9,7 +9,13 @@ import "hardhat/console.sol";
 contract TokenSwapping is Ownable {
     using SafeMath for uint256;
 
-    mapping(address => mapping(address => uint256[2])) public rates;
+    mapping(address => mapping(address => uint256[2])) private _rates;
+
+    modifier rateExist(address _tokenFrom, address _tokenTo) {
+        uint256[2] memory rate = getRate(_tokenFrom, _tokenTo);
+        require(rate[0] > 0 && rate[1] > 0, "Token cannot be exchanged");
+        _;
+    }
 
     function modifyRate(
         address _tokenFrom,
@@ -28,9 +34,8 @@ contract TokenSwapping is Ownable {
         address _tokenFrom,
         address _tokenTo,
         uint256 _amountToSwap
-    ) external {
-        uint256[2] memory rate = rates[_tokenFrom][_tokenTo];
-        require(rate[0] > 0 && rate[1] > 0, "Token cannot be exchanged");
+    ) external rateExist(_tokenFrom, _tokenTo) {
+        uint256[2] memory rate = getRate(_tokenFrom, _tokenTo);
         require(_amountToSwap % rate[0] == 0, "Invalid amount to swap");
 
         IERC20 tokenFrom = IERC20(_tokenFrom);
@@ -46,8 +51,32 @@ contract TokenSwapping is Ownable {
             "We do not have enough tokens. Please try again"
         );
 
-        tokenFrom.transferFrom(msg.sender, address(this), _amountToSwap);
-        tokenTo.transfer(msg.sender, amountToReceive);
+        _takeToken(tokenFrom, msg.sender, _amountToSwap);
+        _sendToken(tokenTo, msg.sender, amountToReceive);
+    }
+
+    function _takeToken(
+        IERC20 token,
+        address _from,
+        uint256 _amount
+    ) private {
+        token.transferFrom(_from, address(this), _amount);
+    }
+
+    function _sendToken(
+        IERC20 token,
+        address _to,
+        uint256 _amount
+    ) private {
+        token.transfer(_to, _amount);
+    }
+
+    function getRate(address _tokenFrom, address _tokenTo)
+        public
+        view
+        returns (uint256[2] memory)
+    {
+        return _rates[_tokenFrom][_tokenTo];
     }
 
     function _setRate(
@@ -59,6 +88,6 @@ contract TokenSwapping is Ownable {
         uint256[2] memory rate;
         rate[0] = _fromAmount;
         rate[1] = _toAmount;
-        rates[_tokenFrom][_tokenTo] = rate;
+        _rates[_tokenFrom][_tokenTo] = rate;
     }
 }

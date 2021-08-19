@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { BigNumberish, Contract } from "ethers";
+import { BigNumber, BigNumberish, Contract } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 import { TokenSwapping, USDT, PKF, IERC20 } from "../typechain";
@@ -71,12 +71,11 @@ describe("TokenSwapping contract", function () {
         2
       );
 
-      expect(
-        await contract.rates(usdtContract.address, pkfContract.address, 0)
-      ).to.equal(1);
-      expect(
-        await contract.rates(usdtContract.address, pkfContract.address, 1)
-      ).to.equal(2);
+      const rate = await contract.getRate(
+        usdtContract.address,
+        pkfContract.address
+      );
+      expect(rate.map((e) => e.toString())).to.deep.equal(["1", "2"]);
     });
 
     it("updates exist pair", async () => {
@@ -86,9 +85,12 @@ describe("TokenSwapping contract", function () {
         1,
         3
       );
-      expect(
-        await contract.rates(usdtContract.address, pkfContract.address, 1)
-      ).to.equal(3);
+      let rate = await contract.getRate(
+        usdtContract.address,
+        pkfContract.address
+      );
+
+      expect(rate.map((e) => e.toString())).to.deep.equal(["1", "3"]);
 
       await contract.modifyRate(
         usdtContract.address,
@@ -96,9 +98,8 @@ describe("TokenSwapping contract", function () {
         1,
         4
       );
-      expect(
-        await contract.rates(usdtContract.address, pkfContract.address, 1)
-      ).to.equal(4);
+      rate = await contract.getRate(usdtContract.address, pkfContract.address);
+      expect(rate.map((e) => e.toString())).to.deep.equal(["1", "4"]);
     });
   });
 
