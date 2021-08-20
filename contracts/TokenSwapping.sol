@@ -3,9 +3,6 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-
-interface ERC20Detailed is IERC20, IERC20Metadata {}
 
 contract TokenSwapping is Ownable {
     mapping(address => mapping(address => uint256[2])) private _rates;
@@ -37,15 +34,10 @@ contract TokenSwapping is Ownable {
         uint256[2] memory rate = getRate(_tokenFrom, _tokenTo);
         require(_amountToSwap > 0, "Please increase the amount to trade");
 
-        ERC20Detailed tokenFrom = ERC20Detailed(_tokenFrom);
-        ERC20Detailed tokenTo = ERC20Detailed(_tokenTo);
+        IERC20 tokenFrom = IERC20(_tokenFrom);
+        IERC20 tokenTo = IERC20(_tokenTo);
 
-        uint256 amountToReceive = _exchange(
-            tokenFrom.decimals(),
-            _amountToSwap,
-            tokenTo.decimals(),
-            rate
-        );
+        uint256 amountToReceive = _exchange(_amountToSwap, rate);
         require(amountToReceive > 0, "Please increase the amount to trade");
 
         require(
@@ -61,29 +53,16 @@ contract TokenSwapping is Ownable {
         _sendToken(tokenTo, msg.sender, amountToReceive);
     }
 
-    function _exchange(
-        uint8 _tokenFromDecimals,
-        uint256 _fromAmount,
-        uint8 _tokenToDecimals,
-        uint256[2] memory _rate
-    ) private pure returns (uint256 _toAmount) {
-        if (_tokenFromDecimals > _tokenToDecimals) {
-            uint8 decimalsDiff = _tokenFromDecimals - _tokenToDecimals;
-            _toAmount =
-                ((_fromAmount * _rate[1]) / _rate[0]) /
-                (10**decimalsDiff);
-        } else if (_tokenFromDecimals < _tokenToDecimals) {
-            uint8 decimalsDiff = _tokenToDecimals - _tokenFromDecimals;
-            _toAmount =
-                ((_fromAmount * _rate[1]) * (10**decimalsDiff)) /
-                _rate[0];
-        } else {
-            _toAmount = (_fromAmount * _rate[1]) / _rate[0];
-        }
+    function _exchange(uint256 _fromAmount, uint256[2] memory _rate)
+        private
+        pure
+        returns (uint256)
+    {
+        return (_fromAmount * _rate[1]) / _rate[0];
     }
 
     function _takeToken(
-        ERC20Detailed token,
+        IERC20 token,
         address _from,
         uint256 _amount
     ) private {
@@ -91,7 +70,7 @@ contract TokenSwapping is Ownable {
     }
 
     function _sendToken(
-        ERC20Detailed token,
+        IERC20 token,
         address _to,
         uint256 _amount
     ) private {

@@ -1,44 +1,15 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { BigNumber, BigNumberish, Contract } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 import { TokenSwapping, USDT, PKF, IERC20, WBNB } from "../typechain";
+import { deployToken, seed, deployContract, toBigNumber } from "./utils";
 
 const USDT_DECIMALS = 6;
 const PKF_DECIMALS = 12;
 const WBNB_DECIMALS = 18;
 
-const toBigNumber = (
-  value: number | string,
-  decimals: number
-): BigNumberish => {
-  const strValue = value.toString();
-  const [integerValue, decimalsValue] = strValue.split(".");
-  const decimalsDiff = decimals - (decimalsValue?.length || 0);
-  return BigNumber.from(
-    [integerValue, decimalsValue || "", "0".repeat(decimalsDiff)].join("")
-  );
-};
-
-const deployContract = async <T extends Contract>(
-  name: string,
-  contractOwner: SignerWithAddress,
-  ...args: any[]
-) => {
-  const contractFactory = await ethers.getContractFactory(name, contractOwner);
-  return contractFactory.deploy(...args) as Promise<T>;
-};
-
-const deployToken = async <T extends Contract>(
-  name: string,
-  contractOwner: SignerWithAddress,
-  decimals: number
-) => {
-  return deployContract<T>(name, contractOwner, toBigNumber(1000000, decimals));
-};
-
-const INITIAL_TOKEN_AMOUNT = 100;
+const INITIAL_TOKEN_AMOUNT = 10_000_000;
 
 describe("TokenSwapping contract", function () {
   let contract: TokenSwapping;
@@ -55,44 +26,9 @@ describe("TokenSwapping contract", function () {
 
   let user: SignerWithAddress;
 
-  const seed = async <T extends IERC20>(
-    contract: T,
-    owner: SignerWithAddress,
-    recipients: any[],
-    amount: BigNumberish
-  ) => {
-    for (const recipient of recipients) {
-      await contract.approve(owner.address, amount);
-      await contract.transferFrom(owner.address, recipient.address, amount);
-    }
-  };
-
-  const seedUsdt = (recipients: any[], amount: number) => {
-    return seed(
-      usdtContract,
-      usdtOwner,
-      recipients,
-      toBigNumber(amount, USDT_DECIMALS)
-    );
-  };
-
-  const seedPkf = (recipients: any[], amount: number) => {
-    return seed(
-      pkfContract,
-      pkfOwner,
-      recipients,
-      toBigNumber(amount, PKF_DECIMALS)
-    );
-  };
-
-  const seedWbnb = (recipients: any[], amount: number) => {
-    return seed(
-      wbnbContract,
-      wbnbOwner,
-      recipients,
-      toBigNumber(amount, WBNB_DECIMALS)
-    );
-  };
+  const seedUsdt = () => seed<USDT>(usdtContract, usdtOwner);
+  const seedPkf = () => seed(pkfContract, pkfOwner);
+  const seedWbnb = () => seed(wbnbContract, wbnbOwner);
 
   beforeEach(async function () {
     [admin, user, usdtOwner, pkfOwner, wbnbOwner] = await ethers.getSigners();
@@ -161,77 +97,65 @@ describe("TokenSwapping contract", function () {
   });
 
   describe("Swapping", () => {
-    it("allows user to trade into token has more decimals", async () => {
+    it("allows user to trade into lower amount of token", async () => {
       await contract.modifyRate(
-        usdtContract.address,
         pkfContract.address,
-        1000000,
-        571590
+        usdtContract.address,
+        1_000_000,
+        571_590
       );
 
-      await seedUsdt([user], INITIAL_TOKEN_AMOUNT);
-      await seedPkf([contract], INITIAL_TOKEN_AMOUNT);
-      await usdtContract
-        .connect(user)
-        .approve(contract.address, toBigNumber(1, USDT_DECIMALS));
+      await seedPkf()([user], INITIAL_TOKEN_AMOUNT);
+      await seedUsdt()([contract], INITIAL_TOKEN_AMOUNT);
+      await pkfContract.connect(user).approve(contract.address, 100_000);
 
       await contract
         .connect(user)
-        .swap(
-          usdtContract.address,
-          pkfContract.address,
-          toBigNumber(1, USDT_DECIMALS)
-        );
+        .swap(pkfContract.address, usdtContract.address, 100_000);
 
       expect(await pkfContract.balanceOf(user.address)).to.equal(
-        toBigNumber(0.57159, PKF_DECIMALS)
+        toBigNumber(INITIAL_TOKEN_AMOUNT - 100_000)
       );
       expect(await usdtContract.balanceOf(user.address)).to.equal(
-        toBigNumber(INITIAL_TOKEN_AMOUNT - 1, USDT_DECIMALS)
+        toBigNumber(57_159)
       );
 
       expect(await pkfContract.balanceOf(contract.address)).to.equal(
-        toBigNumber(INITIAL_TOKEN_AMOUNT - 0.57159, PKF_DECIMALS)
+        toBigNumber(100_000)
       );
       expect(await usdtContract.balanceOf(contract.address)).to.equal(
-        toBigNumber(1, USDT_DECIMALS)
+        toBigNumber(INITIAL_TOKEN_AMOUNT - 57_159)
       );
     });
 
-    it("allows user to trade into token has less decimals", async () => {
+    it("allows user to trade into higher amount of token", async () => {
       await contract.modifyRate(
         wbnbContract.address,
         pkfContract.address,
         10,
-        200
+        200_000
       );
 
-      await seedWbnb([user], INITIAL_TOKEN_AMOUNT);
-      await seedPkf([contract], INITIAL_TOKEN_AMOUNT);
-      await wbnbContract
-        .connect(user)
-        .approve(contract.address, toBigNumber(1, WBNB_DECIMALS));
+      await seedWbnb()([user], INITIAL_TOKEN_AMOUNT);
+      await seedPkf()([contract], INITIAL_TOKEN_AMOUNT);
+      await wbnbContract.connect(user).approve(contract.address, 10);
 
       await contract
         .connect(user)
-        .swap(
-          wbnbContract.address,
-          pkfContract.address,
-          toBigNumber(1, WBNB_DECIMALS)
-        );
+        .swap(wbnbContract.address, pkfContract.address, 1);
 
-      expect(await pkfContract.balanceOf(user.address)).to.equal(
-        toBigNumber(20, PKF_DECIMALS)
-      );
       expect(await wbnbContract.balanceOf(user.address)).to.equal(
-        toBigNumber(INITIAL_TOKEN_AMOUNT - 1, WBNB_DECIMALS)
+        toBigNumber(INITIAL_TOKEN_AMOUNT - 1)
+      );
+      expect(await pkfContract.balanceOf(user.address)).to.equal(
+        toBigNumber(20_000)
       );
 
-      expect(await pkfContract.balanceOf(contract.address)).to.equal(
-        toBigNumber(INITIAL_TOKEN_AMOUNT - 20, PKF_DECIMALS)
-      );
       expect(await wbnbContract.balanceOf(contract.address)).to.equal(
-        toBigNumber(1, WBNB_DECIMALS)
+        toBigNumber(1)
+      );
+      expect(await pkfContract.balanceOf(contract.address)).to.equal(
+        toBigNumber(INITIAL_TOKEN_AMOUNT - 20_000)
       );
     });
 
@@ -242,32 +166,27 @@ describe("TokenSwapping contract", function () {
         3,
         1
       );
-      await seedUsdt([user], INITIAL_TOKEN_AMOUNT);
-      await seedWbnb([contract], INITIAL_TOKEN_AMOUNT);
-      await usdtContract
-        .connect(user)
-        .approve(contract.address, toBigNumber(1, USDT_DECIMALS));
+
+      await seedUsdt()([user], INITIAL_TOKEN_AMOUNT);
+      await seedWbnb()([contract], INITIAL_TOKEN_AMOUNT);
+      await usdtContract.connect(user).approve(contract.address, 1_000_000);
 
       await contract
         .connect(user)
-        .swap(
-          usdtContract.address,
-          wbnbContract.address,
-          toBigNumber(1, USDT_DECIMALS)
-        );
+        .swap(usdtContract.address, wbnbContract.address, 1_000_000);
 
-      expect(await wbnbContract.balanceOf(user.address)).to.equal(
-        toBigNumber("3".repeat(18), 0)
-      );
       expect(await usdtContract.balanceOf(user.address)).to.equal(
-        toBigNumber(INITIAL_TOKEN_AMOUNT - 1, USDT_DECIMALS)
+        toBigNumber(INITIAL_TOKEN_AMOUNT - 1_000_000)
+      );
+      expect(await wbnbContract.balanceOf(user.address)).to.equal(
+        toBigNumber(333_333)
       );
 
-      expect(await wbnbContract.balanceOf(contract.address)).to.equal(
-        toBigNumber(`99${"6".repeat(17)}7`, 0)
-      );
       expect(await usdtContract.balanceOf(contract.address)).to.equal(
-        toBigNumber(1, USDT_DECIMALS)
+        toBigNumber(1_000_000)
+      );
+      expect(await wbnbContract.balanceOf(contract.address)).to.equal(
+        toBigNumber(INITIAL_TOKEN_AMOUNT - 333_333)
       );
     });
 
@@ -286,8 +205,8 @@ describe("TokenSwapping contract", function () {
         3,
         1
       );
-      await seedWbnb([user], INITIAL_TOKEN_AMOUNT);
-      await seedUsdt([contract], INITIAL_TOKEN_AMOUNT);
+      await seedWbnb()([user], INITIAL_TOKEN_AMOUNT);
+      await seedUsdt()([contract], INITIAL_TOKEN_AMOUNT);
 
       const swap = contract
         .connect(user)
@@ -305,8 +224,8 @@ describe("TokenSwapping contract", function () {
         3,
         1
       );
-      await seedWbnb([user], INITIAL_TOKEN_AMOUNT);
-      await seedUsdt([contract], INITIAL_TOKEN_AMOUNT);
+      await seedWbnb()([user], INITIAL_TOKEN_AMOUNT);
+      await seedUsdt()([contract], INITIAL_TOKEN_AMOUNT);
 
       const swap = contract
         .connect(user)
@@ -324,16 +243,12 @@ describe("TokenSwapping contract", function () {
         1,
         1
       );
-      await seedWbnb([user], INITIAL_TOKEN_AMOUNT);
-      await seedUsdt([contract], INITIAL_TOKEN_AMOUNT);
+      await seedWbnb()([user], INITIAL_TOKEN_AMOUNT);
+      await seedUsdt()([contract], INITIAL_TOKEN_AMOUNT);
 
       const swap = contract
         .connect(user)
-        .swap(
-          wbnbContract.address,
-          usdtContract.address,
-          toBigNumber(5000, WBNB_DECIMALS)
-        );
+        .swap(wbnbContract.address, usdtContract.address, 5_000_000_000);
 
       await expect(swap).to.be.revertedWith("You do not have enough tokens");
     });
@@ -346,15 +261,11 @@ describe("TokenSwapping contract", function () {
         1
       );
 
-      await seedPkf([user], INITIAL_TOKEN_AMOUNT);
+      await seedPkf()([user], INITIAL_TOKEN_AMOUNT);
 
       const swap = contract
         .connect(user)
-        .swap(
-          pkfContract.address,
-          usdtContract.address,
-          toBigNumber(30, PKF_DECIMALS)
-        );
+        .swap(pkfContract.address, usdtContract.address, 30);
 
       await expect(swap).to.be.revertedWith(
         "We do not have enough tokens. Please try again"
@@ -369,16 +280,12 @@ describe("TokenSwapping contract", function () {
         1
       );
 
-      await seedPkf([user], INITIAL_TOKEN_AMOUNT);
-      await seedUsdt([contract], INITIAL_TOKEN_AMOUNT);
+      await seedPkf()([user], INITIAL_TOKEN_AMOUNT);
+      await seedUsdt()([contract], INITIAL_TOKEN_AMOUNT);
 
       const swap = contract
         .connect(user)
-        .swap(
-          pkfContract.address,
-          usdtContract.address,
-          toBigNumber(1, PKF_DECIMALS)
-        );
+        .swap(pkfContract.address, usdtContract.address, 1);
 
       await expect(swap).to.be.revertedWith(
         "ERC20: transfer amount exceeds allowance"
