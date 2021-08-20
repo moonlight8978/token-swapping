@@ -6,8 +6,9 @@
   "author": "_MoonLight_ <moonlight8978@gmail.com>",
   "main": "index.js",
   "scripts": {
-    "build": "npx hardhat compile",
-    "test": "npx hardhat test"
+    "build": "hardhat compile",
+    "test": "hardhat test",
+    "console": "hardhat console"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.2",
