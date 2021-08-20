@@ -71,11 +71,11 @@ contract TokenSwapping is Ownable {
             uint8 decimalsDiff = _tokenFromDecimals - _tokenToDecimals;
             _toAmount =
                 ((_fromAmount * _rate[1]) / _rate[0]) /
-                (uint256)(10**decimalsDiff);
+                (10**decimalsDiff);
         } else if (_tokenFromDecimals < _tokenToDecimals) {
             uint8 decimalsDiff = _tokenToDecimals - _tokenFromDecimals;
             _toAmount =
-                ((_fromAmount * _rate[1]) * (uint256)(10**decimalsDiff)) /
+                ((_fromAmount * _rate[1]) * (10**decimalsDiff)) /
                 _rate[0];
         } else {
             _toAmount = (_fromAmount * _rate[1]) / _rate[0];
