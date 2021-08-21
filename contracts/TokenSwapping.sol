@@ -10,7 +10,6 @@ contract TokenSwapping is Ownable {
         uint256 to;
     }
 
-    // Treat TokenSwapping contract address as native token
     mapping(address => mapping(address => Rate)) private _rates;
 
     modifier rateExist(address _tokenFrom, address _tokenTo) {
@@ -54,31 +53,33 @@ contract TokenSwapping is Ownable {
         address _tokenFrom,
         address _tokenTo,
         uint256 _amountToSwap
-    ) external rateExist(_tokenFrom, _tokenTo) sentEnoughFunds(_amountToSwap) {
+    )
+        external
+        payable
+        rateExist(_tokenFrom, _tokenTo)
+        sentEnoughFunds(_tokenFrom == address(0) ? msg.value : _amountToSwap)
+    {
         Rate memory rate = getRate(_tokenFrom, _tokenTo);
+        uint256 amountToReceive;
+
+        if (_tokenFrom == address(0)) {
+            _amountToSwap = msg.value;
+            amountToReceive = _exchange(_amountToSwap, rate);
+            IERC20 tokenTo = IERC20(_tokenTo);
+            _sendToken(tokenTo, msg.sender, amountToReceive);
+            return;
+        }
+
+        amountToReceive = _exchange(_amountToSwap, rate);
         IERC20 tokenFrom = IERC20(_tokenFrom);
-        uint256 amountToReceive = _exchange(_amountToSwap, rate);
         _takeToken(tokenFrom, msg.sender, _amountToSwap);
 
-        if (_tokenTo == address(this)) {
+        if (_tokenTo == address(0)) {
             _sendEther(payable(msg.sender), amountToReceive);
         } else {
             IERC20 tokenTo = IERC20(_tokenTo);
             _sendToken(tokenTo, msg.sender, amountToReceive);
         }
-    }
-
-    function swapFromNativeToken(address _tokenToAddress)
-        external
-        payable
-        rateExist(address(this), _tokenToAddress)
-        sentEnoughFunds(msg.value)
-    {
-        uint256 _amountToSwap = msg.value;
-        IERC20 tokenTo = IERC20(_tokenToAddress);
-        Rate memory rate = getRate(address(this), _tokenToAddress);
-        uint256 amountToReceive = _exchange(_amountToSwap, rate);
-        _sendToken(tokenTo, msg.sender, amountToReceive);
     }
 
     receive() external payable {}

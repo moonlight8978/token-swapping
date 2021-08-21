@@ -302,7 +302,7 @@ describe("TokenSwapping contract", function () {
     beforeEach(async () => {
       await contract.modifyRate(
         usdtContract.address,
-        contract.address,
+        ethers.constants.AddressZero,
         toBigNumber(3_296.42, 6),
         toBigNumber(1, 18)
       );
@@ -323,7 +323,11 @@ describe("TokenSwapping contract", function () {
 
       await contract
         .connect(user)
-        .swap(usdtContract.address, contract.address, toBigNumber(3_296.42, 6));
+        .swap(
+          usdtContract.address,
+          ethers.constants.AddressZero,
+          toBigNumber(3_296.42, 6)
+        );
 
       expect(await user.getBalance()).to.gt(oldBalance);
     });
@@ -341,7 +345,11 @@ describe("TokenSwapping contract", function () {
 
       const swap = contract
         .connect(user)
-        .swap(usdtContract.address, contract.address, toBigNumber(3_296.42, 6));
+        .swap(
+          usdtContract.address,
+          ethers.constants.AddressZero,
+          toBigNumber(3_296.42, 6)
+        );
 
       await expect(swap).to.be.revertedWith(
         "We do not have enough tokens. Please try again"
@@ -358,7 +366,7 @@ describe("TokenSwapping contract", function () {
   describe("Swap token using native tokens", () => {
     beforeEach(async () => {
       await contract.modifyRate(
-        contract.address,
+        ethers.constants.AddressZero,
         usdtContract.address,
         toBigNumber(1, 18),
         toBigNumber(3_296.42, 6)
@@ -370,9 +378,11 @@ describe("TokenSwapping contract", function () {
 
       const oldBalance = await user.getBalance();
 
-      await contract.connect(user).swapFromNativeToken(usdtContract.address, {
-        value: ethers.utils.parseEther("1"),
-      });
+      await contract
+        .connect(user)
+        .swap(ethers.constants.AddressZero, usdtContract.address, 0, {
+          value: ethers.utils.parseEther("1"),
+        });
 
       expect(await usdtContract.balanceOf(user.address)).to.equal(
         toBigNumber(3_296.42, 6)
@@ -392,7 +402,7 @@ describe("TokenSwapping contract", function () {
 
       const swap = contract
         .connect(user)
-        .swapFromNativeToken(usdtContract.address, {
+        .swap(ethers.constants.AddressZero, usdtContract.address, 0, {
           value: 1500,
         });
 
