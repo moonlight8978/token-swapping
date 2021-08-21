@@ -96,7 +96,7 @@ describe("TokenSwapping contract", function () {
     });
   });
 
-  describe("Swapping", () => {
+  describe("Swapping token with token", () => {
     it("allows user to trade into lower amount of token", async () => {
       await contract.modifyRate(
         pkfContract.address,
@@ -207,6 +207,7 @@ describe("TokenSwapping contract", function () {
       );
       await seedWbnb()([user], INITIAL_TOKEN_AMOUNT);
       await seedUsdt()([contract], INITIAL_TOKEN_AMOUNT);
+      await wbnbContract.connect(user).approve(contract.address, 1);
 
       const swap = contract
         .connect(user)
@@ -262,6 +263,7 @@ describe("TokenSwapping contract", function () {
       );
 
       await seedPkf()([user], INITIAL_TOKEN_AMOUNT);
+      await pkfContract.connect(user).approve(contract.address, 30);
 
       const swap = contract
         .connect(user)
@@ -291,5 +293,9 @@ describe("TokenSwapping contract", function () {
         "ERC20: transfer amount exceeds allowance"
       );
     });
+  });
+
+  describe("Swapping native token to token", () => {
+    
   });
 });
