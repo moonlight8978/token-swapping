@@ -59,7 +59,8 @@ describe("TokenSwapping contract", function () {
         usdtContract.address,
         pkfContract.address
       );
-      expect(rate.map((e) => e.toString())).to.deep.equal(["1", "2"]);
+      expect(rate.from).to.deep.equal(toBigNumber(1));
+      expect(rate.to).to.deep.equal(toBigNumber(2));
     });
 
     it("updates exist pair", async () => {
@@ -74,7 +75,8 @@ describe("TokenSwapping contract", function () {
         pkfContract.address
       );
 
-      expect(rate.map((e) => e.toString())).to.deep.equal(["1", "3"]);
+      expect(rate.from).to.deep.equal(toBigNumber(1));
+      expect(rate.to).to.deep.equal(toBigNumber(3));
 
       await contract.modifyRate(
         usdtContract.address,
@@ -83,7 +85,8 @@ describe("TokenSwapping contract", function () {
         4
       );
       rate = await contract.getRate(usdtContract.address, pkfContract.address);
-      expect(rate.map((e) => e.toString())).to.deep.equal(["1", "4"]);
+      expect(rate.from).to.deep.equal(toBigNumber(1));
+      expect(rate.to).to.deep.equal(toBigNumber(4));
     });
 
     it("does not allow non-owner to modify", async () => {
@@ -295,7 +298,5 @@ describe("TokenSwapping contract", function () {
     });
   });
 
-  describe("Swapping native token to token", () => {
-    
-  });
+  describe("Swapping native token to token", () => {});
 });

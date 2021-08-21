@@ -5,12 +5,17 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract TokenSwapping is Ownable {
+    struct Rate {
+        uint256 from;
+        uint256 to;
+    }
+
     // Treat TokenSwapping contract address as native token
-    mapping(address => mapping(address => uint256[2])) private _rates;
+    mapping(address => mapping(address => Rate)) private _rates;
 
     modifier rateExist(address _tokenFrom, address _tokenTo) {
-        uint256[2] memory rate = getRate(_tokenFrom, _tokenTo);
-        require(rate[0] > 0 && rate[1] > 0, "Token cannot be exchanged");
+        Rate memory rate = getRate(_tokenFrom, _tokenTo);
+        require(rate.from > 0 && rate.to > 0, "Token cannot be exchanged");
         _;
     }
 
@@ -46,7 +51,7 @@ contract TokenSwapping is Ownable {
         address _tokenTo,
         uint256 _amountToSwap
     ) external rateExist(_tokenFrom, _tokenTo) sentEnoughFunds(_amountToSwap) {
-        uint256[2] memory rate = getRate(_tokenFrom, _tokenTo);
+        Rate memory rate = getRate(_tokenFrom, _tokenTo);
         IERC20 tokenFrom = IERC20(_tokenFrom);
         IERC20 tokenTo = IERC20(_tokenTo);
         uint256 amountToReceive = _exchange(_amountToSwap, rate);
@@ -60,7 +65,7 @@ contract TokenSwapping is Ownable {
         sentEnoughFunds(_amountToSwap)
     {
         IERC20 tokenFrom = IERC20(_tokenFromAddress);
-        uint256[2] memory rate = getRate(_tokenFromAddress, address(this));
+        Rate memory rate = getRate(_tokenFromAddress, address(this));
         uint256 amountToReceive = _exchange(_amountToSwap, rate);
         _takeToken(tokenFrom, msg.sender, _amountToSwap);
         _sendEther(payable(msg.sender), amountToReceive);
@@ -74,17 +79,17 @@ contract TokenSwapping is Ownable {
     {
         uint256 _amountToSwap = msg.value;
         IERC20 tokenTo = IERC20(_tokenToAddress);
-        uint256[2] memory rate = getRate(address(this), _tokenToAddress);
+        Rate memory rate = getRate(address(this), _tokenToAddress);
         uint256 amountToReceive = _exchange(_amountToSwap, rate);
         _sendToken(tokenTo, msg.sender, amountToReceive);
     }
 
-    function _exchange(uint256 _fromAmount, uint256[2] memory _rate)
+    function _exchange(uint256 _fromAmount, Rate memory _rate)
         private
         pure
         returns (uint256)
     {
-        return (_fromAmount * _rate[1]) / _rate[0];
+        return (_fromAmount * _rate.to) / _rate.from;
     }
 
     function _takeToken(
@@ -137,7 +142,7 @@ contract TokenSwapping is Ownable {
     function getRate(address _tokenFrom, address _tokenTo)
         public
         view
-        returns (uint256[2] memory)
+        returns (Rate memory)
     {
         return _rates[_tokenFrom][_tokenTo];
     }
@@ -148,9 +153,7 @@ contract TokenSwapping is Ownable {
         uint256 _fromAmount,
         uint256 _toAmount
     ) private {
-        uint256[2] memory rate;
-        rate[0] = _fromAmount;
-        rate[1] = _toAmount;
+        Rate memory rate = Rate(_fromAmount, _toAmount);
         _rates[_tokenFrom][_tokenTo] = rate;
     }
 }
