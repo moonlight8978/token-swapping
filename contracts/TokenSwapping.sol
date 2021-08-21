@@ -5,12 +5,36 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract TokenSwapping is Ownable {
-    mapping(address => mapping(address => uint256[2])) private _rates;
+    struct Rate {
+        uint256 from;
+        uint256 to;
+    }
+
+    // Treat TokenSwapping contract address as native token
+    mapping(address => mapping(address => Rate)) private _rates;
 
     modifier rateExist(address _tokenFrom, address _tokenTo) {
-        uint256[2] memory rate = getRate(_tokenFrom, _tokenTo);
-        require(rate[0] > 0 && rate[1] > 0, "Token cannot be exchanged");
+        Rate memory rate = getRate(_tokenFrom, _tokenTo);
+        require(rate.from > 0 && rate.to > 0, "Token cannot be exchanged");
         _;
+    }
+
+    modifier hasEnoughBalance(
+        uint256 _balance,
+        uint256 _amountToSent,
+        string memory _descriptor
+    ) {
+        require(_balance >= _amountToSent, _descriptor);
+        _;
+    }
+
+    modifier sentEnoughFunds(uint256 _amount) {
+        require(_amount > 0, "Please increase the amount to trade");
+        _;
+    }
+
+    function withdraw(uint256 _amount) external onlyOwner {
+        _sendEther(payable(owner()), _amount);
     }
 
     function modifyRate(
@@ -30,42 +54,57 @@ contract TokenSwapping is Ownable {
         address _tokenFrom,
         address _tokenTo,
         uint256 _amountToSwap
-    ) external rateExist(_tokenFrom, _tokenTo) {
-        uint256[2] memory rate = getRate(_tokenFrom, _tokenTo);
-        require(_amountToSwap > 0, "Please increase the amount to trade");
-
+    ) external rateExist(_tokenFrom, _tokenTo) sentEnoughFunds(_amountToSwap) {
+        Rate memory rate = getRate(_tokenFrom, _tokenTo);
         IERC20 tokenFrom = IERC20(_tokenFrom);
-        IERC20 tokenTo = IERC20(_tokenTo);
-
         uint256 amountToReceive = _exchange(_amountToSwap, rate);
-        require(amountToReceive > 0, "Please increase the amount to trade");
-
-        require(
-            tokenFrom.balanceOf(msg.sender) >= _amountToSwap,
-            "You do not have enough tokens"
-        );
-        require(
-            tokenTo.balanceOf(address(this)) >= amountToReceive,
-            "We do not have enough tokens. Please try again"
-        );
-
         _takeToken(tokenFrom, msg.sender, _amountToSwap);
+
+        if (_tokenTo == address(this)) {
+            _sendEther(payable(msg.sender), amountToReceive);
+        } else {
+            IERC20 tokenTo = IERC20(_tokenTo);
+            _sendToken(tokenTo, msg.sender, amountToReceive);
+        }
+    }
+
+    function swapFromNativeToken(address _tokenToAddress)
+        external
+        payable
+        rateExist(address(this), _tokenToAddress)
+        sentEnoughFunds(msg.value)
+    {
+        uint256 _amountToSwap = msg.value;
+        IERC20 tokenTo = IERC20(_tokenToAddress);
+        Rate memory rate = getRate(address(this), _tokenToAddress);
+        uint256 amountToReceive = _exchange(_amountToSwap, rate);
         _sendToken(tokenTo, msg.sender, amountToReceive);
     }
 
-    function _exchange(uint256 _fromAmount, uint256[2] memory _rate)
+    receive() external payable {}
+
+    fallback() external {}
+
+    function _exchange(uint256 _fromAmount, Rate memory _rate)
         private
         pure
         returns (uint256)
     {
-        return (_fromAmount * _rate[1]) / _rate[0];
+        return (_fromAmount * _rate.to) / _rate.from;
     }
 
     function _takeToken(
         IERC20 token,
         address _from,
         uint256 _amount
-    ) private {
+    )
+        private
+        hasEnoughBalance(
+            token.balanceOf(_from),
+            _amount,
+            "You do not have enough tokens"
+        )
+    {
         token.transferFrom(_from, address(this), _amount);
     }
 
@@ -73,14 +112,38 @@ contract TokenSwapping is Ownable {
         IERC20 token,
         address _to,
         uint256 _amount
-    ) private {
+    )
+        private
+        hasEnoughBalance(
+            token.balanceOf(address(this)),
+            _amount,
+            "We do not have enough tokens. Please try again"
+        )
+        sentEnoughFunds(_amount)
+    {
         token.transfer(_to, _amount);
+    }
+
+    function _sendEther(address payable _to, uint256 _amount)
+        private
+        hasEnoughBalance(
+            address(this).balance,
+            _amount,
+            "We do not have enough tokens. Please try again"
+        )
+        sentEnoughFunds(_amount)
+    {
+        /**
+         * https://consensys.net/diligence/blog/2019/09/stop-using-soliditys-transfer-now/
+         */
+        (bool sent, ) = _to.call{value: _amount}("");
+        require(sent, "Failed to sent ether");
     }
 
     function getRate(address _tokenFrom, address _tokenTo)
         public
         view
-        returns (uint256[2] memory)
+        returns (Rate memory)
     {
         return _rates[_tokenFrom][_tokenTo];
     }
@@ -91,9 +154,7 @@ contract TokenSwapping is Ownable {
         uint256 _fromAmount,
         uint256 _toAmount
     ) private {
-        uint256[2] memory rate;
-        rate[0] = _fromAmount;
-        rate[1] = _toAmount;
+        Rate memory rate = Rate(_fromAmount, _toAmount);
         _rates[_tokenFrom][_tokenTo] = rate;
     }
 }
