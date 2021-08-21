@@ -298,5 +298,111 @@ describe("TokenSwapping contract", function () {
     });
   });
 
-  describe("Swapping native token to token", () => {});
+  describe("Swapping token to native token", () => {
+    beforeEach(async () => {
+      await contract.modifyRate(
+        usdtContract.address,
+        contract.address,
+        toBigNumber(3_296.42, 6),
+        toBigNumber(1, 18)
+      );
+    });
+
+    it("swap successfully when contract has enough balance", async () => {
+      await admin.sendTransaction({
+        to: contract.address,
+        value: ethers.utils.parseEther("2"),
+      });
+
+      const oldBalance = await user.getBalance();
+
+      await seedUsdt()([user], toBigNumber(10_000, 6));
+      await usdtContract
+        .connect(user)
+        .approve(contract.address, toBigNumber(3_296.42, 6));
+
+      await contract
+        .connect(user)
+        .swap(usdtContract.address, contract.address, toBigNumber(3_296.42, 6));
+
+      expect(await user.getBalance()).to.gt(oldBalance);
+    });
+
+    it("revert when contract does not have enough balance", async () => {
+      await admin.sendTransaction({
+        to: contract.address,
+        value: ethers.utils.parseEther("0.5"),
+      });
+
+      await seedUsdt()([user], toBigNumber(10_000, 6));
+      await usdtContract
+        .connect(user)
+        .approve(contract.address, toBigNumber(3_296.42, 6));
+
+      const swap = contract
+        .connect(user)
+        .swap(usdtContract.address, contract.address, toBigNumber(3_296.42, 6));
+
+      await expect(swap).to.be.revertedWith(
+        "We do not have enough tokens. Please try again"
+      );
+      expect(await usdtContract.balanceOf(user.address)).to.equal(
+        toBigNumber(10_000, 6)
+      );
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(
+        ethers.utils.parseEther("0.5")
+      );
+    });
+  });
+
+  describe("Swap token using native tokens", () => {
+    beforeEach(async () => {
+      await contract.modifyRate(
+        contract.address,
+        usdtContract.address,
+        toBigNumber(1, 18),
+        toBigNumber(3_296.42, 6)
+      );
+    });
+
+    it("swap successfully", async () => {
+      await seedUsdt()([contract], toBigNumber(10_000, 6));
+
+      const oldBalance = await user.getBalance();
+
+      await contract.connect(user).swapFromNativeToken(usdtContract.address, {
+        value: ethers.utils.parseEther("1"),
+      });
+
+      expect(await usdtContract.balanceOf(user.address)).to.equal(
+        toBigNumber(3_296.42, 6)
+      );
+      expect(await user.getBalance()).to.lt(oldBalance);
+
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(
+        toBigNumber(1, 18)
+      );
+      expect(await usdtContract.balanceOf(contract.address)).to.equal(
+        toBigNumber(10_000 - 3_296.42, 6)
+      );
+    });
+
+    it("revert if user does not send enough ETH", async () => {
+      await seedUsdt()([contract], toBigNumber(10_000, 6));
+
+      const swap = contract
+        .connect(user)
+        .swapFromNativeToken(usdtContract.address, {
+          value: 1500,
+        });
+
+      await expect(swap).to.be.revertedWith(
+        "Please increase the amount to trade"
+      );
+
+      expect(await usdtContract.balanceOf(contract.address)).to.equal(
+        toBigNumber(10_000, 6)
+      );
+    });
+  });
 });

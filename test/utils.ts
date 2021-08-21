@@ -6,7 +6,7 @@ import { IERC20 } from "../typechain";
 export const toBigNumber = (
   value: number | string,
   decimals: number = 0
-): BigNumberish => {
+): BigNumber => {
   const strValue = value.toString();
   const [integerValue, decimalsValue] = strValue.split(".");
   const decimalsDiff = decimals - (decimalsValue?.length || 0);

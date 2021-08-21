@@ -33,6 +33,10 @@ contract TokenSwapping is Ownable {
         _;
     }
 
+    function withdraw(uint256 _amount) external onlyOwner {
+        _sendEther(payable(owner()), _amount);
+    }
+
     function modifyRate(
         address _tokenFrom,
         address _tokenTo,
@@ -53,22 +57,15 @@ contract TokenSwapping is Ownable {
     ) external rateExist(_tokenFrom, _tokenTo) sentEnoughFunds(_amountToSwap) {
         Rate memory rate = getRate(_tokenFrom, _tokenTo);
         IERC20 tokenFrom = IERC20(_tokenFrom);
-        IERC20 tokenTo = IERC20(_tokenTo);
         uint256 amountToReceive = _exchange(_amountToSwap, rate);
         _takeToken(tokenFrom, msg.sender, _amountToSwap);
-        _sendToken(tokenTo, msg.sender, amountToReceive);
-    }
 
-    function swapToNativeToken(address _tokenFromAddress, uint256 _amountToSwap)
-        external
-        rateExist(_tokenFromAddress, address(this))
-        sentEnoughFunds(_amountToSwap)
-    {
-        IERC20 tokenFrom = IERC20(_tokenFromAddress);
-        Rate memory rate = getRate(_tokenFromAddress, address(this));
-        uint256 amountToReceive = _exchange(_amountToSwap, rate);
-        _takeToken(tokenFrom, msg.sender, _amountToSwap);
-        _sendEther(payable(msg.sender), amountToReceive);
+        if (_tokenTo == address(this)) {
+            _sendEther(payable(msg.sender), amountToReceive);
+        } else {
+            IERC20 tokenTo = IERC20(_tokenTo);
+            _sendToken(tokenTo, msg.sender, amountToReceive);
+        }
     }
 
     function swapFromNativeToken(address _tokenToAddress)
@@ -83,6 +80,10 @@ contract TokenSwapping is Ownable {
         uint256 amountToReceive = _exchange(_amountToSwap, rate);
         _sendToken(tokenTo, msg.sender, amountToReceive);
     }
+
+    receive() external payable {}
+
+    fallback() external {}
 
     function _exchange(uint256 _fromAmount, Rate memory _rate)
         private
