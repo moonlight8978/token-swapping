@@ -8,7 +8,9 @@
   "scripts": {
     "build": "hardhat compile",
     "test": "hardhat test",
-    "console": "hardhat console"
+    "console": "hardhat console",
+    "start": "ts-node ./client/index.ts",
+    "deploy:local": "hardhat run --network localhost scripts/deploy.ts"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.2",

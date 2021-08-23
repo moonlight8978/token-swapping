@@ -19,6 +19,7 @@
     "test/**/*.ts",
     "typechain/**/*.d.ts",
     "typechain/**/*.ts",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "client/**/*.ts"
   ]
 }
