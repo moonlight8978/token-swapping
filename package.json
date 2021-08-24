@@ -30,6 +30,8 @@
   },
   "packageManager": "yarn@3.0.1",
   "dependencies": {
-    "@openzeppelin/contracts": "^4.3.0"
+    "@openzeppelin/contracts": "^4.3.0",
+    "commander": "^8.1.0",
+    "meow": "^10.1.1"
   }
 }

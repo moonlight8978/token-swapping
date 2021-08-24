@@ -1,29 +1,59 @@
+import { accounts, deployer, getToken, tokenSwapping } from "./utils";
+import { program, Option } from "commander";
 import { ethers } from "ethers";
-import secret from "../secret.json";
-import TokenSwapping from "../artifacts/contracts/TokenSwapping.sol/TokenSwapping.json";
-import { TokenSwapping as ITokenSwapping } from "./../typechain";
 
-const { accounts } = secret;
+program
+  .version("0.0.1")
+  .command("set")
+  .addOption(
+    new Option("--user <username>", "required").choices([
+      "deployer",
+      "bob",
+      "alice",
+    ])
+  )
+  .option("--from <address>", "From address")
+  .option("--to <address>", "To address")
+  .option("--amountFrom <value>", "From amount")
+  .option("--amountTo <value>", "To amount")
+  .action(async (options) => {
+    await tokenSwapping
+      // @ts-ignore
+      .connect(accounts[options.user])
+      .modifyRate(
+        options.from,
+        options.to,
+        options.amountFrom,
+        options.amountTo
+      );
+  });
 
-const provider = new ethers.providers.JsonRpcProvider({
-  url: "http://127.0.0.1:8545",
-});
+program
+  .command("swap")
+  .addOption(
+    new Option("--user <username>", "required").choices([
+      "deployer",
+      "bob",
+      "alice",
+    ])
+  )
+  .option("--from <tokenAddress>", "From token address")
+  .option("--to <tokenAddress>", "To token address")
+  .option("--amount <tokenAddress>", "Amount to swap")
+  .action(async (options) => {
+    if (options.from === ethers.constants.AddressZero) {
+      await tokenSwapping
+        // @ts-ignore
+        .connect(accounts[options.user])
+        .swap(options.from, options.to, 0, { value: options.amount });
+    } else {
+      const token = getToken(options.from);
+      await token.approve(tokenSwapping.address, options.amount);
+      await tokenSwapping
+        // @ts-ignore
+        .connect(accounts[options.user])
+        .swap(options.from, options.to, options.amount);
+    }
+  });
 
-const run = async () => {
-  const balance = await provider.getBalance(accounts[0].address);
-  console.log(balance);
-  const contract = new ethers.Contract(
-    "0x1E02890AC1a68C60C5aEBF8Af852DC0dE28D5954",
-    TokenSwapping.abi,
-    provider
-  ) as ITokenSwapping;
-  console.log(await contract.owner());
-  console.log(
-    await contract.getRate(
-      ethers.constants.AddressZero,
-      ethers.constants.AddressZero
-    )
-  );
-};
-
-run();
+program.parse(process.argv);
