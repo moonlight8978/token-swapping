@@ -18,6 +18,8 @@
     "tasks/**/*.ts",
     "test/**/*.ts",
     "typechain/**/*.d.ts",
-    "typechain/**/*.ts"
+    "typechain/**/*.ts",
+    "scripts/**/*.ts",
+    "client/**/*.ts"
   ]
 }
